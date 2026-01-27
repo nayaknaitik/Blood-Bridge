@@ -16,18 +16,18 @@ app.secret_key = "blood_bridge_secret_key"
 app.config["MONGO_URI"] = "mongodb://localhost:27017/bloodbridge"
 mongo = PyMongo(app)
 
-# Helper to ensure donors have blood_group populated based on donations
+# Helper to ensure users have blood_group populated based on donations
 def enrich_users_with_blood_group(users):
     """
-    For donor users who don't have a blood_group stored,
+    For users who don't have a blood_group stored,
     try to infer it from their latest donation and persist it.
     """
     for user in users:
         try:
-            if user.get('role') == 'donor' and not user.get('blood_group'):
-                donor_id_str = str(user['_id'])
+            if not user.get('blood_group'):
+                user_id_str = str(user['_id'])
                 latest_donation = mongo.db.donations.find_one(
-                    {"donor_id": donor_id_str},
+                    {"donor_id": user_id_str},
                     sort=[("date", -1), ("_id", -1)]
                 )
                 if latest_donation and latest_donation.get('blood_group'):
@@ -52,18 +52,14 @@ def signup():
     if request.method == 'POST':
         users = mongo.db.users
 
-        role = request.form['role']
-        if request.form.get('admin_code') == "Admin@2026":
-            role = 'admin'
-
         hashed_password = generate_password_hash(request.form['password'])
 
         users.insert_one({
             'name': request.form['name'],
             'email': request.form['email'],
             'password': hashed_password,
-            'role': role,
-            'blood_group': request.form.get('blood_group')  # save blood group
+            # no role stored at signup for normal users
+            'blood_group': request.form.get('blood_group')
         })
 
         flash('Registration successful!')
@@ -80,9 +76,16 @@ def login():
 
         if user and check_password_hash(user['password'], request.form['password']):
             session['user_id'] = str(user['_id'])
-            session['role'] = user['role']
             session['name'] = user['name']
-            return redirect(url_for('dashboard'))
+            session['user_email'] = user.get('email')
+            # Preserve any special roles (admin / bloodbank) if they exist
+            session['role'] = user.get('role')
+
+            # Normal users: go to role selection page
+            if user.get('role') in ['admin', 'bloodbank']:
+                return redirect(url_for('dashboard'))
+            else:
+                return redirect(url_for('choose_role'))
 
         flash('Invalid email or password')
 
@@ -94,76 +97,97 @@ def dashboard():
     if 'user_id' not in session:
         return redirect(url_for('login'))
 
-    role = session['role']
     user_id = session['user_id']
+    # Always fetch the latest user document
+    user = mongo.db.users.find_one({'_id': ObjectId(user_id)})
+    if not user:
+        session.clear()
+        return redirect(url_for('login'))
 
-    if role == 'donor':
-        # Fetch all donations for this donor, sorted by date (newest first)
-        user_donations = list(mongo.db.donations.find({"donor_id": user_id}).sort([("date", -1), ("_id", -1)]))
-        return render_template('donor_dashboard.html', donations=user_donations)
-    
-    elif role == 'recipient':
-        # Fetch recipient's blood requests
-        user_requests = list(mongo.db.blood_requests.find({"requester_id": user_id}).sort("timestamp", -1))
-        
-        # Calculate inventory for availability check
-        blood_groups = ["A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"]
-        inventory = {}
-        
-        for bg in blood_groups:
-            # Count available donations with this blood group
-            units = mongo.db.donations.count_documents({
-                "blood_group": bg,
-                "status": {"$in": ["Scheduled", "Completed"]}
-            })
-            inventory[bg] = units
-        
-        # Add availability info to each request
-        requests_with_availability = []
-        for req in user_requests:
-            requested_bg = req.get('blood_group', '') or ''
-            
-            # Safely convert units to int
-            try:
-                units_value = req.get('units', 0)
-                if isinstance(units_value, str):
-                    requested_units = int(units_value) if units_value.isdigit() else 0
-                else:
-                    requested_units = int(units_value) if units_value else 0
-            except (ValueError, TypeError):
-                requested_units = 0
-            
-            available_units = inventory.get(requested_bg, 0)
-            
-            # Format timestamp safely
-            timestamp = req.get('timestamp')
-            if timestamp:
-                if isinstance(timestamp, datetime):
-                    timestamp_str = timestamp.strftime('%Y-%m-%d')
-                else:
-                    timestamp_str = str(timestamp)[:10] if len(str(timestamp)) >= 10 else 'N/A'
-            else:
-                timestamp_str = 'N/A'
-            
-            req_dict = {
-                '_id': str(req.get('_id', '')),
-                'patient_name': req.get('patient_name', 'N/A'),
-                'blood_group': requested_bg,
-                'units': requested_units,
-                'hospital': req.get('hospital', 'N/A'),
-                'status': req.get('status', 'pending'),
-                'timestamp': timestamp_str,
-                'timestamp_obj': timestamp,  # Keep original for sorting if needed
-                'available_units': available_units,
-                'is_available': available_units >= requested_units if requested_units > 0 else False
-            }
-            requests_with_availability.append(req_dict)
-        
-        return render_template('recipient_dashboard.html', 
-                             requests=requests_with_availability,
-                             inventory=inventory)
+    role = user.get('role')  # only used for special accounts (admin / bloodbank)
+    current_role = user.get('current_role') or session.get('current_role')
 
-    elif role == 'bloodbank':
+    # -------- Normal user flows: donor / recipient via current_role --------
+    if role not in ['admin', 'bloodbank']:
+        if current_role == 'donor':
+            # Fetch all donations for this user, sorted by date (newest first)
+            user_donations = list(
+                mongo.db.donations.find({"donor_id": user_id}).sort([("date", -1), ("_id", -1)])
+            )
+            session['current_role'] = 'donor'
+            return render_template('donor_dashboard.html', donations=user_donations)
+
+        if current_role == 'recipient':
+            # Fetch this user's blood requests
+            user_requests = list(
+                mongo.db.blood_requests.find({"requester_id": user_id}).sort("timestamp", -1)
+            )
+
+            # Calculate inventory for availability check
+            blood_groups = ["A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"]
+            inventory = {}
+
+            for bg in blood_groups:
+                # Count available donations with this blood group
+                units = mongo.db.donations.count_documents({
+                    "blood_group": bg,
+                    "status": {"$in": ["Scheduled", "Completed"]}
+                })
+                inventory[bg] = units
+
+            # Add availability info to each request
+            requests_with_availability = []
+            for req in user_requests:
+                requested_bg = req.get('blood_group', '') or ''
+
+                # Safely convert units to int
+                try:
+                    units_value = req.get('units', 0)
+                    if isinstance(units_value, str):
+                        requested_units = int(units_value) if units_value.isdigit() else 0
+                    else:
+                        requested_units = int(units_value) if units_value else 0
+                except (ValueError, TypeError):
+                    requested_units = 0
+
+                available_units = inventory.get(requested_bg, 0)
+
+                # Format timestamp safely
+                timestamp = req.get('timestamp')
+                if timestamp:
+                    if isinstance(timestamp, datetime):
+                        timestamp_str = timestamp.strftime('%Y-%m-%d')
+                    else:
+                        timestamp_str = str(timestamp)[:10] if len(str(timestamp)) >= 10 else 'N/A'
+                else:
+                    timestamp_str = 'N/A'
+
+                req_dict = {
+                    '_id': str(req.get('_id', '')),
+                    'patient_name': req.get('patient_name', 'N/A'),
+                    'blood_group': requested_bg,
+                    'units': requested_units,
+                    'hospital': req.get('hospital', 'N/A'),
+                    'status': req.get('status', 'pending'),
+                    'timestamp': timestamp_str,
+                    'timestamp_obj': timestamp,  # Keep original for sorting if needed
+                    'available_units': available_units,
+                    'is_available': available_units >= requested_units if requested_units > 0 else False
+                }
+                requests_with_availability.append(req_dict)
+
+            session['current_role'] = 'recipient'
+            return render_template(
+                'recipient_dashboard.html',
+                requests=requests_with_availability,
+                inventory=inventory
+            )
+
+        # If no current_role chosen yet, send user to role-selection
+        return redirect(url_for('choose_role'))
+
+    # -------- Blood bank & admin flows (special accounts) --------
+    if role == 'bloodbank':
         # Fetch latest 5 donors from donations collection
         recent_donors_list = list(
             mongo.db.donations.find(
@@ -207,8 +231,10 @@ def dashboard():
         # Get recent requests
         recent_requests = list(mongo.db.blood_requests.find({"status": "pending"}).limit(10))
 
+        donors_count = len(mongo.db.donations.distinct('donor_id'))
+
         stats = {
-            'total_donors': mongo.db.users.count_documents({'role': 'donor'}),
+            'total_donors': donors_count,
             'pending_requests': mongo.db.blood_requests.count_documents({'status': 'pending'}),
             'total_units': total_units,
             'today_donations': today_donations
@@ -253,10 +279,13 @@ def dashboard():
         pending_requests_count = mongo.db.blood_requests.count_documents({'status': 'pending'})
         completed_requests_count = mongo.db.blood_requests.count_documents({'status': 'fulfilled'})
 
+        donors_count = len(mongo.db.donations.distinct('donor_id'))
+        recipients_count = len(mongo.db.blood_requests.distinct('requester_id'))
+
         stats = {
             'total_users': len(users),
-            'donors_count': mongo.db.users.count_documents({'role': 'donor'}),
-            'recipients_count': mongo.db.users.count_documents({'role': 'recipient'}),
+            'donors_count': donors_count,
+            'recipients_count': recipients_count,
             'banks_count': mongo.db.users.count_documents({'role': 'bloodbank'}),
             'total_requests': len(blood_requests),
             'pending_requests': pending_requests_count,
@@ -309,10 +338,13 @@ def admin_dashboard():
     pending_requests_count = mongo.db.blood_requests.count_documents({'status': 'pending'})
     completed_requests_count = mongo.db.blood_requests.count_documents({'status': 'fulfilled'})
 
+    donors_count = len(mongo.db.donations.distinct('donor_id'))
+    recipients_count = len(mongo.db.blood_requests.distinct('requester_id'))
+
     dashboard_stats = {
         'total_users': len(all_users),
-        'donors_count': mongo.db.users.count_documents({'role': 'donor'}),
-        'recipients_count': mongo.db.users.count_documents({'role': 'recipient'}),
+        'donors_count': donors_count,
+        'recipients_count': recipients_count,
         'banks_count': mongo.db.users.count_documents({'role': 'bloodbank'}),
         'total_requests': len(all_requests),
         'pending_requests': pending_requests_count,
@@ -339,6 +371,35 @@ def delete_user(user_id):
         flash("User removed successfully.")
     return redirect(url_for('admin_dashboard'))
 
+
+@app.route('/choose_role', methods=['GET', 'POST'])
+def choose_role():
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+
+    user = mongo.db.users.find_one({'_id': ObjectId(session['user_id'])})
+    if not user:
+        session.clear()
+        return redirect(url_for('login'))
+
+    # Special accounts skip role selection
+    if user.get('role') in ['admin', 'bloodbank']:
+        return redirect(url_for('dashboard'))
+
+    if request.method == 'POST':
+        role_choice = request.form.get('role_choice')
+        if role_choice not in ['donor', 'recipient']:
+            flash('Please choose how you want to use BloodBridge.')
+            return redirect(url_for('choose_role'))
+
+        mongo.db.users.update_one(
+            {'_id': user['_id']},
+            {'$set': {'current_role': role_choice}}
+        )
+        session['current_role'] = role_choice
+        return redirect(url_for('dashboard'))
+
+    return render_template('choose_role.html')
 
 @app.route('/request_blood')
 def request_blood():

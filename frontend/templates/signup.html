@@ -7,16 +7,10 @@
         <input type="email" name="email" placeholder="Email Address" required>
         <input type="password" name="password" placeholder="Create Password" required>
 
-        <select name="role" id="role-select">
-            <option value="donor">Donor</option>
-            <option value="recipient">Recipient</option>
-            <option value="bloodbank">Blood Bank</option>
-        </select>
-
-        <!-- Blood group is important for donors and recipients -->
-        <div class="input-group" id="blood-group-wrapper">
+        <!-- Blood group for the user -->
+        <div class="input-group">
             <label>Blood Group</label>
-            <select name="blood_group" id="blood-group-select" required>
+            <select name="blood_group" required>
                 <option value="">--Select Blood Group--</option>
                 <option value="A+">A+</option>
                 <option value="A-">A-</option>
@@ -40,26 +34,4 @@
     </form>
 </div>
 
-<script>
-// If you later add more roles, keep blood group required only for donor/recipient
-const roleSelect = document.getElementById('role-select');
-const bloodGroupWrapper = document.getElementById('blood-group-wrapper');
-const bloodGroupSelect = document.getElementById('blood-group-select');
-
-function updateBloodGroupVisibility() {
-    const role = roleSelect.value;
-    if (role === 'donor' || role === 'recipient') {
-        bloodGroupWrapper.style.display = 'block';
-        bloodGroupSelect.required = true;
-    } else {
-        bloodGroupWrapper.style.display = 'none';
-        bloodGroupSelect.required = false;
-        bloodGroupSelect.value = '';
-    }
-}
-
-roleSelect.addEventListener('change', updateBloodGroupVisibility);
-// Initialize on load
-updateBloodGroupVisibility();
-</script>
 {% endblock %}

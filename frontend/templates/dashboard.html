@@ -4,21 +4,34 @@
 <div class="dashboard-wrapper">
     <div class="welcome-banner">
         <h1>Hello, {{ session['name'] }}!</h1>
-        <p>You are logged in as a <strong>{{ session['role'] | capitalize }}</strong></p>
+        <p>
+            {% if session.get('role') in ['admin', 'bloodbank'] %}
+                You are logged in as a <strong>{{ session['role'] | capitalize }}</strong>
+            {% else %}
+                {% set cr = session.get('current_role') %}
+                {% if cr == 'donor' %}
+                    You are using BloodBridge as a <strong>Donor</strong>
+                {% elif cr == 'recipient' %}
+                    You are using BloodBridge as a <strong>Recipient</strong>
+                {% else %}
+                    You have not selected a role for this session yet.
+                {% endif %}
+            {% endif %}
+        </p>
     </div>
 
     <div class="portal-grid">
         <div class="portal-card">
             <h3>Quick Actions</h3>
             <ul class="action-list">
-                {% if session['role'] == 'donor' %}
+                {% if session.get('current_role') == 'donor' %}
                     <li><a href="{{ url_for('dashboard') }}">View Donation History</a></li>
                     <li><a href="#">Find Nearby Blood Banks</a></li>
                     <li><a href="{{ url_for('about') }}">Donation Guidelines</a></li>
-                {% elif session['role'] == 'bloodbank' %}
+                {% elif session.get('role') == 'bloodbank' %}
                     <li><a href="{{ url_for('request_blood') }}">Create Blood Request</a></li>
                     <li><a href="{{ url_for('dashboard') }}">Manage Inventory</a></li>
-                {% elif session['role'] == 'admin' %}
+                {% elif session.get('role') == 'admin' %}
                     <li><a href="{{ url_for('admin_dashboard') }}">User Management</a></li>
                     <li><a href="#">System Logs</a></li>
                 {% endif %}
