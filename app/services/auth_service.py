@@ -8,6 +8,8 @@ from app.services.database_service import (
     create_user,
     find_user_by_id,
     update_user_current_role,
+    find_admin_by_email,
+    create_admin,
     get_db,
 )
 from app.services.validation import validate_registration, validate_login, validate_choose_role
@@ -29,13 +31,27 @@ class AuthService:
         email = (data.get("email") or "").strip().lower()
         password = data.get("password")
         blood_group = (data.get("blood_group") or "").strip() or None
+         # Admin registration via special code
+        admin_code = (data.get("admin_code") or "").strip()
+        is_admin = admin_code == "1234"
 
-        if find_user_by_email(self.db, email):
-            return False, "An account with this email already exists.", None
-
-        hashed = generate_password_hash(password)
-        user_id = create_user(self.db, name, email, hashed, blood_group=blood_group)
-        return True, "Registration successful.", {"user_id": user_id}
+        if is_admin:
+            # Ensure no existing admin with this email
+            if find_admin_by_email(self.db, email):
+                return False, "An admin account with this email already exists.", None
+            hashed = generate_password_hash(password)
+            admin_id = create_admin(self.db, name, email, hashed)
+            return True, "Admin registration successful. Please login via the admin portal.", {
+                "admin_id": admin_id,
+                "is_admin": True,
+            }
+        else:
+            # Normal user registration
+            if find_user_by_email(self.db, email):
+                return False, "An account with this email already exists.", None
+            hashed = generate_password_hash(password)
+            user_id = create_user(self.db, name, email, hashed, blood_group=blood_group)
+            return True, "Registration successful.", {"user_id": user_id, "is_admin": False}
 
     def login(self, data):
         """Validate credentials and return user info for session. Returns (success, message, user_dict)."""

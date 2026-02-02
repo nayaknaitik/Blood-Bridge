@@ -49,6 +49,8 @@ def create_app(config_overrides=None):
     from app.routes.requests import requests_bp
     from app.routes.matching import matching_bp
     from app.routes.health import health_bp
+    from app.routes.admin_auth import admin_auth_bp
+    from app.routes.admin import admin_bp
     from app.routes.pages import pages_bp
 
     app.register_blueprint(auth_bp, url_prefix="/api/auth")
@@ -56,6 +58,8 @@ def create_app(config_overrides=None):
     app.register_blueprint(requests_bp, url_prefix="/api/requests")
     app.register_blueprint(matching_bp, url_prefix="/api/matching")
     app.register_blueprint(health_bp, url_prefix="/api")
+    app.register_blueprint(admin_auth_bp, url_prefix="/api/admin")
+    app.register_blueprint(admin_bp, url_prefix="/api/admin")
     app.register_blueprint(pages_bp)
 
     return app

@@ -397,3 +397,44 @@ def count_users_by_role(db, role):
         )
         count += r.get("Count", 0)
     return count
+
+
+# ---------- Admin users (separate table) ----------
+def find_admin_by_email(db, email):
+    """Find admin by email from Admins table."""
+    email = (email or "").strip().lower()
+    if not email:
+        return None
+    try:
+        r = db.admins.query(
+            IndexName="admin-email-index",
+            KeyConditionExpression="email = :e",
+            ExpressionAttributeValues={":e": email},
+            Limit=1,
+        )
+        items = list(r.get("Items", []))
+        return _serialize_item(items[0]) if items else None
+    except Exception:
+        return None
+
+
+def find_admin_by_id(db, admin_id):
+    """Find admin by id (primary key) from Admins table."""
+    try:
+        r = db.admins.get_item(Key={"id": str(admin_id)})
+        return _serialize_item(r.get("Item")) if r.get("Item") else None
+    except Exception:
+        return None
+
+
+def create_admin(db, name, email, password_hash):
+    """Create a new admin user in Admins table."""
+    admin_id = str(uuid.uuid4())
+    item = {
+        "id": admin_id,
+        "name": (name or "").strip(),
+        "email": (email or "").strip().lower(),
+        "password": password_hash,
+    }
+    db.admins.put_item(Item=item)
+    return admin_id

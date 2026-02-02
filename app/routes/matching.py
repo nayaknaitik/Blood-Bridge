@@ -1,5 +1,5 @@
 """
-Matching / dashboard API: inventory, dashboard payload by role (donor, recipient, bloodbank, admin).
+Matching / dashboard API: inventory, dashboard payload by role (donor, recipient, bloodbank).
 All responses JSON.
 """
 from datetime import datetime
@@ -72,7 +72,7 @@ def dashboard():
     current_role = user.get("current_role") or session.get("current_role")
 
     # Normal users: donor or recipient
-    if role not in ["admin", "bloodbank"]:
+    if role not in ["bloodbank"]:
         if current_role == "donor":
             docs = get_donations_by_donor(db, session["user_id"])
             return json_response(
@@ -128,40 +128,6 @@ def dashboard():
             },
         )
 
-    # Admin
-    users = list_all_users(db)
-    users = enrich_users_with_blood_group(db, users)
-    blood_requests = get_all_blood_requests_sorted(db, sort_timestamp=-1)
-    all_donations = get_all_donations_sorted(db, sort_timestamp=-1)
-    inv_counts = count_donations_by_blood_group_and_status(
-        db, blood_groups=BLOOD_GROUPS, statuses=["Scheduled", "Completed"]
-    )
-    inventory_list = [{"group": bg, "units": inv_counts.get(bg, 0)} for bg in BLOOD_GROUPS]
-    today_str = datetime.now().strftime("%Y-%m-%d")
-    stats = {
-        "total_users": len(users),
-        "donors_count": count_donors_distinct(db),
-        "recipients_count": count_recipients_distinct(db),
-        "banks_count": count_users_by_role(db, "bloodbank"),
-        "total_requests": len(blood_requests),
-        "pending_requests": count_blood_requests_by_status(db, "pending"),
-        "completed_requests": count_blood_requests_by_status(db, "fulfilled"),
-        "total_donations": len(all_donations),
-        "today_donations": count_donations_by_date(db, today_str),
-        "total_inventory": sum(inv_counts.values()),
-    }
-    users_ser = [User.to_serializable(u) for u in users]
-    donations_ser = Donation.list_serializable(all_donations[:10])
-    requests_ser = BloodRequest.list_serializable(blood_requests)
-    return json_response(
-        True,
-        "OK",
-        {
-            "view": "admin",
-            "users": users_ser,
-            "requests": requests_ser,
-            "donations": donations_ser,
-            "inventory": inventory_list,
-            "stats": stats,
-        },
-    )
+    # Admin dashboard is now fully separate under /api/admin, so matching.dashboard
+    # should never be used for admin accounts.
+    return json_response(False, "Invalid role for user dashboard.", None, 400)

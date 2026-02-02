@@ -21,6 +21,9 @@
                 <li><a href="{{ url_for('pages.login') }}">Login</a></li>
                 <li><a href="{{ url_for('pages.register') }}">Sign Up</a></li>
             {% endif %}
+            <li>
+                <a href="{{ url_for('pages.admin_login') }}" class="btn-outline">Login as Admin</a>
+            </li>
         </ul>
     </nav>
 

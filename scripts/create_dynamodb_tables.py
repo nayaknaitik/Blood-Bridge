@@ -22,6 +22,7 @@ from config import (
     DONATIONS_TABLE,
     BLOOD_REQUESTS_TABLE,
     MESSAGES_TABLE,
+    ADMINS_TABLE,
 )
 
 
@@ -128,6 +129,28 @@ def create_tables(client):
         print(f"Created table: {MESSAGES_TABLE}")
     except client.exceptions.ResourceInUseException:
         print(f"Table {MESSAGES_TABLE} already exists.")
+
+    # Admins: PK id (S), GSI admin-email-index (email as PK for admin login)
+    try:
+        client.create_table(
+            TableName=ADMINS_TABLE,
+            KeySchema=[{"AttributeName": "id", "KeyType": "HASH"}],
+            AttributeDefinitions=[
+                {"AttributeName": "id", "AttributeType": "S"},
+                {"AttributeName": "email", "AttributeType": "S"},
+            ],
+            GlobalSecondaryIndexes=[
+                {
+                    "IndexName": "admin-email-index",
+                    "KeySchema": [{"AttributeName": "email", "KeyType": "HASH"}],
+                    "Projection": {"ProjectionType": "ALL"},
+                }
+            ],
+            BillingMode="PAY_PER_REQUEST",
+        )
+        print(f"Created table: {ADMINS_TABLE}")
+    except client.exceptions.ResourceInUseException:
+        print(f"Table {ADMINS_TABLE} already exists.")
 
 
 if __name__ == "__main__":

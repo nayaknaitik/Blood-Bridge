@@ -43,6 +43,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 email: document.querySelector('#register-form input[name="email"]')?.value?.trim()?.toLowerCase() || '',
                 password: document.querySelector('#register-form input[name="password"]')?.value || '',
                 blood_group: document.querySelector('#register-form select[name="blood_group"]')?.value?.trim() || null,
+                admin_code: document.querySelector('#register-form input[name="admin_code"]')?.value?.trim() || '',
             };
             const res = await window.BloodBridgeAPI.auth.register(payload);
             if (res.ok && res.data.success) {

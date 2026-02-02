@@ -1,0 +1,13 @@
+{% extends "admin/admin_base.html" %}
+
+{% block content %}
+<div id="admin-users-root">
+  <p class="loading">Loading users...</p>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/admin/admin_api.js') }}"></script>
+<script src="{{ url_for('static', filename='js/admin/admin_app.js') }}"></script>
+{% endblock %}
+

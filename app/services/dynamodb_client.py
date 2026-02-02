@@ -12,6 +12,7 @@ from config import (
     DONATIONS_TABLE,
     BLOOD_REQUESTS_TABLE,
     MESSAGES_TABLE,
+    ADMINS_TABLE,
 )
 
 
@@ -24,7 +25,15 @@ def _get_client():
 
 
 def get_dynamodb_tables(app):
-    """Return an object with .users, .donations, .blood_requests, .messages (DynamoDB Table resources)."""
+    """Return an object with DynamoDB Table resources.
+
+    Exposes:
+      - users
+      - donations
+      - blood_requests
+      - messages
+      - admins
+    """
     client = _get_client()
     return type("DynamoDBTables", (), {
         "client": client,
@@ -32,6 +41,7 @@ def get_dynamodb_tables(app):
         "donations": client.Table(os.environ.get("DONATIONS_TABLE") or DONATIONS_TABLE),
         "blood_requests": client.Table(os.environ.get("BLOOD_REQUESTS_TABLE") or BLOOD_REQUESTS_TABLE),
         "messages": client.Table(os.environ.get("MESSAGES_TABLE") or MESSAGES_TABLE),
+        "admins": client.Table(os.environ.get("ADMINS_TABLE") or ADMINS_TABLE),
     })()
 
 

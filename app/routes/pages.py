@@ -73,12 +73,18 @@ def view_requests():
     return render_template("view_requests_for_donors.html")
 
 
-@pages_bp.route("/admin_dashboard")
-@_require_login
+@pages_bp.route("/admin/login")
+def admin_login():
+    """Admin login page (separate from user login)."""
+    return render_template("admin/admin_login.html")
+
+
+@pages_bp.route("/admin/dashboard")
 def admin_dashboard():
-    if session.get("role") != "admin":
-        return redirect(url_for("pages.dashboard"))
-    return render_template("admin_dashboard.html")
+    """Admin dashboard shell; data loaded via admin JS."""
+    if "admin_id" not in session:
+        return redirect(url_for("pages.admin_login"))
+    return render_template("admin/admin_dashboard.html")
 
 
 @pages_bp.route("/contact")

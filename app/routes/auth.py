@@ -76,20 +76,6 @@ def get_session():
     return json_response(True, "OK", data)
 
 
-@auth_bp.route("/users/<user_id>/delete", methods=["POST", "DELETE"])
-@require_session
-def delete_user(user_id):
-    """Admin only: delete user by id."""
-    if session.get("role") != "admin":
-        return json_response(False, "Unauthorized.", None, 403)
-    from app.services.database_service import get_db, delete_user_by_id, find_user_by_id
-    db = get_db(current_app)
-    if not find_user_by_id(db, user_id):
-        return json_response(False, "User not found.", None, 404)
-    delete_user_by_id(db, user_id)
-    return json_response(True, "User removed successfully.", None)
-
-
 @auth_bp.route("/choose-role", methods=["POST"])
 @require_session
 def choose_role():

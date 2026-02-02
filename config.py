@@ -22,11 +22,13 @@ SESSION_COOKIE_SAMESITE = "Lax"
 AWS_REGION = _get_env("AWS_REGION", "us-east-1")
 AWS_ACCESS_KEY_ID = _get_env("AWS_ACCESS_KEY_ID", "")
 AWS_SECRET_ACCESS_KEY = _get_env("AWS_SECRET_ACCESS_KEY", "")
+
 # Table names (create these in DynamoDB)
 USERS_TABLE = _get_env("USERS_TABLE", "bloodbridge-users")
 DONATIONS_TABLE = _get_env("DONATIONS_TABLE", "bloodbridge-donations")
 BLOOD_REQUESTS_TABLE = _get_env("BLOOD_REQUESTS_TABLE", "bloodbridge-blood-requests")
 MESSAGES_TABLE = _get_env("MESSAGES_TABLE", "bloodbridge-messages")
+ADMINS_TABLE = _get_env("ADMINS_TABLE", "bloodbridge-admins")
 
 # App
 DEBUG = _get_env("FLASK_DEBUG", "0").lower() in ("1", "true", "yes")
