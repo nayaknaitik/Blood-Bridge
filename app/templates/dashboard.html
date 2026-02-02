@@ -1,0 +1,124 @@
+{% extends "base.html" %}
+{% block content %}
+<div id="dashboard-root">
+    <p class="loading">Loading dashboard...</p>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+(function() {
+    var root = document.getElementById('dashboard-root');
+    fetch('/api/matching/dashboard', { credentials: 'include' })
+        .then(function(r) { return r.json(); })
+        .then(function(res) {
+            if (!res.success) {
+                root.innerHTML = '<p class="flash error">' + (res.message || 'Failed to load dashboard') + '</p>';
+                if (res.message && res.message.indexOf('Choose role') !== -1) {
+                    window.location.href = '/choose_role';
+                }
+                return;
+            }
+            var data = res.data || {};
+            var view = data.view;
+            if (view === 'choose_role') {
+                window.location.href = '/choose_role';
+                return;
+            }
+            if (view === 'donor') {
+                renderDonor(root, data.donations || []);
+                return;
+            }
+            if (view === 'recipient') {
+                renderRecipient(root, data.requests || [], data.inventory || {});
+                return;
+            }
+            if (view === 'bloodbank') {
+                renderBloodbank(root, data);
+                return;
+            }
+            if (view === 'admin') {
+                window.location.href = '/admin_dashboard';
+                return;
+            }
+            root.innerHTML = '<p>Unknown view.</p>';
+        })
+        .catch(function() {
+            root.innerHTML = '<p class="flash error">Failed to load dashboard.</p>';
+        });
+
+    var BLOOD_GROUPS = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'];
+
+    function renderDonor(root, donations) {
+        var html = '<div class="dashboard-container"><h2>Welcome, {{ session.get("name", "Donor") }} (Donor)</h2><div class="stats-grid"><div class="card"><h3>My Donations</h3>';
+        if (donations.length) {
+            html += '<table style="width:100%;border-collapse:collapse;margin-top:10px;"><thead><tr style="border-bottom:2px solid var(--primary);text-align:left;background:#f9f9f9;"><th style="padding:12px;">Date</th><th style="padding:12px;">Location</th><th style="padding:12px;">Blood Group</th><th style="padding:12px;">Time Slot</th><th style="padding:12px;">Status</th></tr></thead><tbody>';
+            donations.forEach(function(d) {
+                html += '<tr><td style="padding:10px;">' + (d.date || 'N/A') + '</td><td style="padding:10px;">' + (d.location || 'N/A') + '</td><td style="padding:10px;"><strong style="color:var(--primary);">' + (d.blood_group || 'N/A') + '</strong></td><td style="padding:10px;">' + (d.time_slot || 'N/A') + '</td><td style="padding:10px;">' + (d.status || '') + '</td></tr>';
+            });
+            html += '</tbody></table>';
+        } else {
+            html += '<p>You haven\'t made any donations yet. Ready to save a life?</p>';
+        }
+        html += '<br><a href="/schedule_donation" class="btn">Schedule Donation</a></div></div></div>';
+        root.innerHTML = html;
+    }
+
+    function renderRecipient(root, requests, inventory) {
+        inventory = inventory || {};
+        var html = '<div class="dashboard-container"><h2>Welcome, {{ session.get("name", "Recipient") }} (Recipient)</h2>';
+        html += '<div class="card" style="margin-bottom:30px;"><h3 style="color:var(--primary);">Request Blood</h3><form id="blood-request-form"><div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:15px;"><div class="input-group"><label>Patient Name</label><input type="text" name="patient_name" placeholder="Name of recipient" required></div><div class="input-group"><label>Blood Group Required</label><select name="blood_group" required><option value="">--Select--</option>';
+        BLOOD_GROUPS.forEach(function(bg) { html += '<option value="' + bg + '">' + bg + '</option>'; });
+        html += '</select></div></div><div style="display:grid;grid-template-columns:1fr 2fr;gap:20px;margin-bottom:15px;"><div class="input-group"><label>Units Required</label><input type="number" name="units" min="1" required></div><div class="input-group"><label>Hospital</label><input type="text" name="hospital" placeholder="Hospital name and address" required></div></div><button type="submit" class="btn btn-block">Submit Blood Request</button></form></div>';
+        html += '<div class="card" style="margin-bottom:30px;"><h3 style="color:var(--primary);">Blood Availability</h3><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:15px;">';
+        BLOOD_GROUPS.forEach(function(bg) {
+            var u = inventory[bg] || 0;
+            html += '<div style="background:' + (u > 0 ? '#d4edda' : '#f8d7da') + ';padding:15px;border-radius:8px;text-align:center;"><h4 style="margin:0;">' + bg + '</h4><p style="margin:5px 0 0 0;font-weight:bold;">' + u + ' Units</p></div>';
+        });
+        html += '</div></div><div class="card"><h3 style="color:var(--primary);">My Blood Requests</h3>';
+        if (requests.length) {
+            html += '<table style="width:100%;border-collapse:collapse;"><thead><tr style="border-bottom:2px solid var(--primary);background:#f9f9f9;"><th>Patient</th><th>Blood Group</th><th>Units</th><th>Hospital</th><th>Availability</th><th>Status</th><th>Date</th></tr></thead><tbody>';
+            requests.forEach(function(r) {
+                var avail = r.is_available ? '✓ Available (' + (r.available_units || 0) + ')' : '✗ Low Stock (' + (r.available_units || 0) + ')';
+                html += '<tr><td>' + (r.patient_name || 'N/A') + '</td><td><strong style="color:var(--primary);">' + (r.blood_group || 'N/A') + '</strong></td><td>' + (r.units || 0) + '</td><td>' + (r.hospital || 'N/A') + '</td><td>' + avail + '</td><td>' + (r.status || 'pending') + '</td><td>' + (r.timestamp || 'N/A') + '</td></tr>';
+            });
+            html += '</tbody></table>';
+        } else {
+            html += '<p>No blood requests yet. Use the form above to request blood.</p>';
+        }
+        html += '</div></div>';
+        root.innerHTML = html;
+        if (document.getElementById('blood-request-form')) {
+            document.getElementById('blood-request-form').addEventListener('submit', function(e) {
+                e.preventDefault();
+                var f = this;
+                var payload = { patient_name: f.querySelector('[name="patient_name"]').value.trim(), blood_group: f.querySelector('[name="blood_group"]').value, units: f.querySelector('[name="units"]').value, hospital: f.querySelector('[name="hospital"]').value.trim() };
+                fetch('/api/requests', { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
+                    .then(function(r) { return r.json(); })
+                    .then(function(res) {
+                        if (res.success) { alert(res.message); window.location.reload(); }
+                        else alert(res.message || 'Failed');
+                    });
+            });
+        }
+    }
+
+    function renderBloodbank(root, data) {
+        var stats = data.stats || {}, donors = data.donors || [], inventory = data.inventory || [], requests = data.requests || [];
+        var html = '<div class="bb-dashboard"><header class="bb-header"><div><h1>Blood Bank Dashboard</h1><p>Real-time operations & inventory overview</p></div><div class="bb-date">' + (data.today || '') + '</div></header>';
+        html += '<div class="bb-stats"><div class="bb-card"><h3>' + (stats.total_units || 0) + '</h3><p>Total Units Available</p></div><div class="bb-card"><h3>' + (stats.today_donations || 0) + '</h3><p>Today\'s Donations</p></div><div class="bb-card urgent"><h3>' + (stats.pending_requests || 0) + '</h3><p>Pending Requests</p></div><div class="bb-card"><h3>' + (stats.total_donors || 0) + '</h3><p>Registered Donors</p></div></div>';
+        html += '<section class="bb-section"><h2>Blood Inventory</h2><div class="inventory-grid">';
+        inventory.forEach(function(item) {
+            html += '<div class="inventory-card' + (item.units < 5 ? ' low' : '') + '"><h3>' + (item.group || '') + '</h3><p>' + (item.units || 0) + ' Units</p></div>';
+        });
+        html += '</div></section><div class="bb-tables"><section class="bb-section"><h2>Recent Requests</h2><div class="table-wrapper"><table><thead><tr><th>Hospital</th><th>Group</th><th>Units</th><th>Status</th></tr></thead><tbody>';
+        if (requests.length) requests.forEach(function(r) { html += '<tr><td>' + (r.hospital || '') + '</td><td><strong style="color:var(--primary);">' + (r.blood_group || '') + '</strong></td><td>' + (r.units || '') + '</td><td class="status ' + (r.status || '') + '">' + (r.status || '') + '</td></tr>'; });
+        else html += '<tr><td colspan="4" style="text-align:center;">No pending requests.</td></tr>';
+        html += '</tbody></table></div></section><section class="bb-section"><h2>Recent Donors</h2><div class="table-wrapper"><table><thead><tr><th>Name</th><th>Group</th><th>Last Donation</th></tr></thead><tbody>';
+        if (donors.length) donors.forEach(function(d) { html += '<tr><td>' + (d.name || '') + '</td><td><strong style="color:var(--primary);">' + (d.blood_group || '') + '</strong></td><td>' + (d.last_donation || '') + '</td></tr>'; });
+        else html += '<tr><td colspan="3" style="text-align:center;">No recent donations.</td></tr>';
+        html += '</tbody></table></div></section></div></div>';
+        root.innerHTML = html;
+    }
+})();
+</script>
+{% endblock %}

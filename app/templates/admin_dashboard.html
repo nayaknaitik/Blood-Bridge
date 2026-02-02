@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% block content %}
+<div id="admin-dashboard-root">
+    <p class="loading">Loading admin dashboard...</p>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+(function() {
+    var root = document.getElementById('admin-dashboard-root');
+    fetch('/api/matching/dashboard', { credentials: 'include' })
+        .then(function(r) { return r.json(); })
+        .then(function(res) {
+            if (!res.success || (res.data && res.data.view !== 'admin')) {
+                root.innerHTML = '<p class="flash error">Unauthorized or failed to load.</p>';
+                return;
+            }
+            var d = res.data;
+            var users = d.users || [], requests = d.requests || [], donations = d.donations || [], inventory = d.inventory || [], stats = d.stats || {};
+            var html = '<div class="admin-container"><header class="admin-header"><h1>Administrator Control Panel</h1><p>Overview of BloodBridge Network</p></header>';
+            html += '<div class="stats-grid"><div class="stat-card"><h3>' + (stats.total_users || 0) + '</h3><p>Total Registered Users</p></div><div class="stat-card"><h3>' + (stats.donors_count || 0) + '</h3><p>Active Donors</p></div><div class="stat-card"><h3>' + (stats.recipients_count || 0) + '</h3><p>Recipients</p></div><div class="stat-card"><h3>' + (stats.banks_count || 0) + '</h3><p>Blood Banks</p></div><div class="stat-card urgent"><h3>' + (stats.pending_requests || 0) + '</h3><p>Pending Requests</p></div><div class="stat-card"><h3>' + (stats.total_donations || 0) + '</h3><p>Total Donations</p></div><div class="stat-card"><h3>' + (stats.today_donations || 0) + '</h3><p>Today\'s Donations</p></div><div class="stat-card"><h3>' + (stats.total_inventory || 0) + '</h3><p>Total Inventory Units</p></div></div>';
+            html += '<section class="admin-table-section"><h2>Blood Inventory Overview</h2><div class="inventory-grid" style="margin-top:20px;">';
+            (inventory || []).forEach(function(item) {
+                html += '<div class="inventory-card' + (item.units < 5 ? ' low' : '') + '"><h3>' + (item.group || '') + '</h3><p>' + (item.units || 0) + ' Units</p></div>';
+            });
+            html += '</div></section><div class="admin-sections"><section class="admin-table-section"><h2>User Management</h2><div class="table-wrapper"><table><thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Action</th></tr></thead><tbody>';
+            (users || []).forEach(function(u) {
+                var role = (u.role || 'user');
+                html += '<tr><td>' + (u.name || '') + '</td><td>' + (u.email || '') + '</td><td><span class="role-badge ' + role + '">' + (role.charAt(0).toUpperCase() + role.slice(1)) + '</span></td><td><button type="button" class="btn-sm delete" data-user-id="' + (u.id || '') + '">Remove</button></td></tr>';
+            });
+            html += '</tbody></table></div></section><section class="admin-table-section"><h2>Blood Requests</h2><div class="table-wrapper"><table><thead><tr><th>Patient</th><th>Group</th><th>Units</th><th>Hospital</th><th>Status</th><th>Date</th></tr></thead><tbody>';
+            (requests || []).forEach(function(r) {
+                html += '<tr><td>' + (r.patient_name || '') + '</td><td><strong style="color:var(--primary);">' + (r.blood_group || '') + '</strong></td><td>' + (r.units || '') + '</td><td>' + (r.hospital || '') + '</td><td>' + (r.status || '') + '</td><td>' + (r.timestamp || '') + '</td></tr>';
+            });
+            html += '</tbody></table></div></section><section class="admin-table-section"><h2>Recent Donations</h2><div class="table-wrapper"><table><thead><tr><th>Donor Name</th><th>Blood Group</th><th>Date</th><th>Location</th><th>Status</th></tr></thead><tbody>';
+            (donations || []).forEach(function(d) {
+                html += '<tr><td>' + (d.donor_name || '') + '</td><td><strong style="color:var(--primary);">' + (d.blood_group || '') + '</strong></td><td>' + (d.date || '') + '</td><td>' + (d.location || '') + '</td><td>' + (d.status || '') + '</td></tr>';
+            });
+            html += '</tbody></table></div></section></div></div>';
+            root.innerHTML = html;
+            root.querySelectorAll('button.btn-sm.delete').forEach(function(btn) {
+                btn.addEventListener('click', function() {
+                    var id = this.getAttribute('data-user-id');
+                    if (!id || !confirm('Are you sure?')) return;
+                    fetch('/api/auth/users/' + encodeURIComponent(id) + '/delete', { method: 'POST', credentials: 'include' })
+                        .then(function(r) { return r.json(); })
+                        .then(function(res) {
+                            if (res.success) window.location.reload();
+                            else alert(res.message || 'Failed');
+                        });
+                });
+            });
+        })
+        .catch(function() {
+            root.innerHTML = '<p class="flash error">Failed to load admin dashboard.</p>';
+        });
+})();
+</script>
+{% endblock %}

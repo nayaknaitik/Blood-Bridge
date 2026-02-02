@@ -4,6 +4,7 @@ Uses DynamoDB for persistence (boto3).
 """
 import os
 from flask import Flask
+from flask_cors import CORS
 
 from config import SECRET_KEY, LOG_DIR, AWS_REGION
 from app.services.dynamodb_client import get_dynamodb_tables
@@ -21,6 +22,21 @@ def create_app(config_overrides=None):
 
     if config_overrides:
         app.config.update(config_overrides)
+
+    CORS(
+        app,
+        supports_credentials=True,
+        origins=[
+            "http://localhost:5000",
+            "http://127.0.0.1:5000",
+            "http://localhost:3000",
+            "http://127.0.0.1:3000",
+            "http://localhost:5173",
+            "http://127.0.0.1:5173",
+        ],
+        allow_headers=["Content-Type", "Accept"],
+        methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    )
 
     app.extensions["dynamodb"] = get_dynamodb_tables(app)
 

@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block content %}
+<div id="view-requests-root">
+    <p class="loading">Loading urgent requests...</p>
+</div>
+<br>
+<a href="{{ url_for('pages.dashboard') }}" class="btn secondary">Back to Dashboard</a>
+{% endblock %}
+{% block scripts %}
+<script>
+(function() {
+    var root = document.getElementById('view-requests-root');
+    fetch('/api/requests/pending', { credentials: 'include' })
+        .then(function(r) { return r.json(); })
+        .then(function(res) {
+            if (!res.success) {
+                root.innerHTML = '<p class="flash error">' + (res.message || 'Failed to load requests') + '</p>';
+                return;
+            }
+            var requests = res.data && res.data.requests ? res.data.requests : [];
+            var html = '<h2>Urgent Blood Requests</h2><div class="admin-table-section"><table><thead><tr><th>Hospital</th><th>Blood Group</th><th>Units Needed</th><th>Action</th></tr></thead><tbody>';
+            if (requests.length) {
+                requests.forEach(function(r) {
+                    html += '<tr><td>' + (r.hospital || '') + '</td><td><strong>' + (r.blood_group || '') + '</strong></td><td>' + (r.units || '') + '</td><td><a href="#" class="btn-sm">I can donate</a></td></tr>';
+                });
+            } else {
+                html += '<tr><td colspan="4">No urgent requests at the moment. Check back later!</td></tr>';
+            }
+            html += '</tbody></table></div>';
+            root.innerHTML = html;
+        })
+        .catch(function() {
+            root.innerHTML = '<p class="flash error">Failed to load requests.</p>';
+        });
+})();
+</script>
+{% endblock %}

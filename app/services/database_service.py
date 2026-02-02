@@ -9,6 +9,8 @@ from decimal import Decimal
 from app.models.user import User
 from app.models.donor import Donation
 from app.models.request import BloodRequest
+from boto3.dynamodb.conditions import Attr
+
 from config import BLOOD_GROUPS
 
 
@@ -213,27 +215,34 @@ def count_donations_by_date(db, date_str):
 def count_donations_by_blood_group_and_status(db, blood_groups=None, statuses=None):
     blood_groups = blood_groups or BLOOD_GROUPS
     statuses = statuses or ["Scheduled", "Completed"]
+
+    # Initialize result
     result = {bg: 0 for bg in blood_groups}
-    r = db.donations.scan(
-        FilterExpression="blood_group IN :bgs AND #st IN :sts",
-        ExpressionAttributeNames={"#st": "status"},
-        ExpressionAttributeValues={":bgs": blood_groups, ":sts": statuses},
+
+    # Correct DynamoDB filter expression
+    filter_expr = (
+        Attr("blood_group").is_in(blood_groups) &
+        Attr("status").is_in(statuses)
     )
+
+    r = db.donations.scan(FilterExpression=filter_expr)
+
     for item in r.get("Items", []):
         bg = item.get("blood_group")
         if bg in result:
             result[bg] += 1
-    while r.get("LastEvaluatedKey"):
+
+    # Handle pagination
+    while "LastEvaluatedKey" in r:
         r = db.donations.scan(
-            FilterExpression="blood_group IN :bgs AND #st IN :sts",
-            ExpressionAttributeNames={"#st": "status"},
-            ExpressionAttributeValues={":bgs": blood_groups, ":sts": statuses},
+            FilterExpression=filter_expr,
             ExclusiveStartKey=r["LastEvaluatedKey"],
         )
         for item in r.get("Items", []):
             bg = item.get("blood_group")
             if bg in result:
                 result[bg] += 1
+
     return result
 
 
